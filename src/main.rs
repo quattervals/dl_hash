@@ -1,25 +1,33 @@
 use regex::Regex;
 use std::fs;
 
+#[derive(Debug)]
 struct MapItem {
     key: String,
     value: i32,
 }
 
-struct HashMap(Vec<MapItem>);
-
-impl HashMap{
-
-    fn new(size:usize) -> Self{
-
-        let mut vec = Vec::with_capacity(size);
-        HashMap(vec)
-
-    }
-
+#[derive(Debug)]
+struct HashMap {
+    items: Vec<MapItem>,
+    // last_item: Option<MapItem>,
+    // first_item: Option<MapItem>,
 }
 
+impl HashMap {
+    fn new(size: usize) -> Self {
+        let mut vec = Vec::with_capacity(size * optimal_initial_size_factor(size));
+        HashMap { items: vec }
+    }
+}
 
+/// We haven't had a discussion about performance trade-offs
+/// One point is to make the vector as short as possible
+/// Another point is to reduce the amount of collisions -> better with long vector
+/// So this function only returns a heuristic tuning value
+fn optimal_initial_size_factor(initial_guess: usize) -> usize {
+    initial_guess * 2
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let book_raw = fs::read_to_string("cd.txt")?;
@@ -42,9 +50,8 @@ mod tests {
 
     const TEST_WORDS: [&str; 4] = ["abcd", "1984", "Gutenberg", "eBook"];
     #[test]
-    fn create_hashmap()
-    {
+    fn create_hashmap() {
         let hmap = HashMap::new(TEST_WORDS.len());
+        println!("map {:#?}", hmap);
     }
-
 }
