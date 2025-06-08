@@ -1,18 +1,32 @@
 use regex::Regex;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 struct MapItem {
     key: String,
     value: i32,
+    index_prev: Option<usize>,
+    index_next: Option<usize>,
+}
+
+impl MapItem {
+    fn new(key: &str, value: i32) -> Self {
+        MapItem {
+            key: key.to_string(),
+            value,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Debug, Default)]
 struct HashMap {
     items: Vec<Option<MapItem>>,
     capacity: usize,
-    // last_item: Option<MapItem>,
-    first_item: Option<usize>,
+    last_touched: Option<usize>,
+    first_touched: Option<usize>,
 }
 
 impl HashMap {
@@ -24,6 +38,23 @@ impl HashMap {
             capacity: vec_size,
             ..Default::default()
         }
+    }
+
+    fn update_neighbours(&mut self, index: usize) {
+        if self.first_touched.is_none() {
+            self.first_touched = Some(index);
+
+            self.items[index].as_mut().unwrap().index_prev = None;
+        } else {
+            self.items[index].as_mut().unwrap().index_prev = self.last_touched;
+            self.items[self.last_touched.unwrap()]
+                .as_mut()
+                .unwrap()
+                .index_next = Some(index);
+        }
+
+        self.items[index].as_mut().unwrap().index_next = None;
+        self.last_touched = Some(index);
     }
 
     /// Not handling that this function may be fallible. E.g.
@@ -55,9 +86,7 @@ impl HashMap {
             }
         }
 
-        if self.first_item.is_none() {
-            self.first_item = Some(index);
-        }
+        self.update_neighbours(index);
     }
 
     fn get(&self, key: &str) -> Option<i32> {
@@ -78,34 +107,81 @@ impl HashMap {
         }
     }
 
+    /// Rewire connections to predecessors and successors
+    /// Unwrapping liberally. This is not well tested and is likely to fail with small collections
+    /// But I need to stop somewhere
+    fn rewire_neighbours_and_remove(&mut self, index: usize) {
+        // if it is the only item
+        if self.first_touched.unwrap() == self.last_touched.unwrap() {
+            self.first_touched = None;
+            self.last_touched = None;
+        }
+        // it is the first touched item
+        else if self.first_touched.unwrap() == index {
+            let successor_idx = self.items[index].as_ref().unwrap().index_next.unwrap();
+            self.items[successor_idx].as_mut().unwrap().index_prev = None;
+            self.first_touched = Some(successor_idx);
+        }
+        // if it is the last touched item
+        else if self.last_touched.unwrap() == index {
+            let pred_idx = self.items[index].as_ref().unwrap().index_prev.unwrap();
+            self.items[pred_idx].as_mut().unwrap().index_next = None;
+            self.last_touched = Some(pred_idx);
+        }
+        // if the item is in between
+        else {
+            let successor_idx = self.items[index].as_ref().unwrap().index_next.unwrap();
+            let pred_idx = self.items[index].as_ref().unwrap().index_prev.unwrap();
+
+            self.items[pred_idx].as_mut().unwrap().index_next = Some(successor_idx);
+            self.items[successor_idx].as_mut().unwrap().index_prev = Some(pred_idx);
+        }
+
+        // let current_item = self.items[index].as_ref().unwrap();
+
+        // println!(
+        //     "previous {:#?}",
+        //     self.items[current_item.index_prev.unwrap()]
+        //         .as_ref()
+        //         .unwrap()
+        // );
+        // println!(" current {:#?}", self.items[index].as_mut().unwrap());
+        // println!("index {index}");
+
+        self.items[index] = None;
+    }
+
     fn remove(&mut self, key: &str) {
         let start_index = key_to_index(key, self.capacity);
         let mut index = start_index;
 
         loop {
             match &self.items[index] {
-                Some(item) if item.key == key => self.items[index] = None,
+                Some(item) if item.key == key => self.rewire_neighbours_and_remove(index),
                 Some(_) => {
                     index = (index + 1) % self.capacity;
                     if index == start_index {
-                        break;
+                        return;
                     }
                 }
-                None => break,
+                None => return,
             }
         }
     }
 
     fn get_first(&self) -> Option<MapItem> {
-        if self.first_item.is_some() {
-            self.items[self.first_item.unwrap()].clone()
+        if self.first_touched.is_some() {
+            self.items[self.first_touched.unwrap()].clone()
         } else {
             None
         }
     }
 
     fn get_last(&self) -> Option<MapItem> {
-        None
+        match self.last_touched {
+            Some(idx) => Some(self.items[idx].as_ref().unwrap().clone()),
+            None => None,
+        }
     }
 }
 
@@ -117,8 +193,6 @@ fn optimal_initial_size_factor(initial_guess: usize) -> usize {
     initial_guess * 2
 }
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 fn key_to_index(key: &str, len: usize) -> usize {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
@@ -147,14 +221,16 @@ mod tests {
     const TEST_WORDS: [&str; 4] = ["abcd", "1984", "Gutenberg", "eBook"];
     const COLLIDING_WORDS: [&str; 1] = ["asdf"];
 
+    fn items_equal(left: &MapItem, right: &MapItem) {
+        assert_eq!(left.key, right.key);
+        assert_eq!(left.value, right.value);
+    }
+
     #[test]
     fn insert_key() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
 
-        let item = MapItem {
-            key: "test".to_string(),
-            value: 33,
-        };
+        let item = MapItem::new("test", 33);
         hmap.insert(item);
 
         let inserted_value = hmap.get("test");
@@ -165,16 +241,10 @@ mod tests {
     fn update_value() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
         for word in TEST_WORDS.iter().enumerate() {
-            hmap.insert(MapItem {
-                key: word.1.to_string(),
-                value: word.0 as i32 + 100,
-            });
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
         }
 
-        hmap.insert(MapItem {
-            key: TEST_WORDS[2].to_string(),
-            value: 77,
-        });
+        hmap.insert(MapItem::new(TEST_WORDS[2], 77));
 
         let updated_value = hmap.get(TEST_WORDS[2]);
         assert_eq!(77, updated_value.unwrap());
@@ -184,16 +254,10 @@ mod tests {
     fn insert_colliding_key() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
         for word in TEST_WORDS.iter().enumerate() {
-            hmap.insert(MapItem {
-                key: word.1.to_string(),
-                value: word.0 as i32 + 100,
-            });
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
         }
 
-        let item = MapItem {
-            key: COLLIDING_WORDS[0].to_string(),
-            value: 33,
-        };
+        let item = MapItem::new(COLLIDING_WORDS[0], 33);
         hmap.insert(item);
 
         let inserted_value = hmap.get(COLLIDING_WORDS[0]);
@@ -204,10 +268,7 @@ mod tests {
     fn remove_key() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
         for word in TEST_WORDS.iter().enumerate() {
-            hmap.insert(MapItem {
-                key: word.1.to_string(),
-                value: word.0 as i32 + 100,
-            });
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
         }
 
         hmap.remove(TEST_WORDS[3]);
@@ -220,41 +281,63 @@ mod tests {
     fn get_first_pair() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
         for word in TEST_WORDS.iter().enumerate() {
-            hmap.insert(MapItem {
-                key: word.1.to_string(),
-                value: word.0 as i32 + 100,
-            });
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
         }
 
         let first_item = hmap.get_first();
 
-        assert_eq!(
-            MapItem {
-                key: TEST_WORDS[0].to_string(),
-                value: 100,
-            },
-            first_item.unwrap()
-        );
+        items_equal(&MapItem::new(TEST_WORDS[0], 100), &first_item.unwrap());
+    }
+
+    #[test]
+    fn get_first_after_deletion_of_veryfirst() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
+        }
+
+        hmap.remove(TEST_WORDS[0]);
+
+        let first_item = hmap.get_first();
+        items_equal(&MapItem::new(TEST_WORDS[1], 101), &first_item.unwrap());
+    }
+
+    #[test]
+    fn get_last_after_deletion_of_last() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
+        }
+
+        hmap.remove(TEST_WORDS[3]);
+
+        let last_item = hmap.get_last();
+        items_equal(&MapItem::new(TEST_WORDS[2], 102), &last_item.unwrap());
+    }
+
+    #[test]
+    fn get_last_item_after_central_deletion() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
+        }
+
+        hmap.remove(TEST_WORDS[2]);
+        hmap.remove(TEST_WORDS[3]);
+
+        let last_item = hmap.get_last();
+        items_equal(&MapItem::new(TEST_WORDS[1], 101), &last_item.unwrap());
     }
 
     #[test]
     fn get_last_touched_pair() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
         for word in TEST_WORDS.iter().enumerate() {
-            hmap.insert(MapItem {
-                key: word.1.to_string(),
-                value: word.0 as i32 + 100,
-            });
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
         }
 
         let last_item = hmap.get_last();
 
-        assert_eq!(
-            MapItem {
-                key: TEST_WORDS[3].to_string(),
-                value: 103,
-            },
-            last_item.unwrap()
-        );
+        items_equal(&MapItem::new(TEST_WORDS[3], 103), &last_item.unwrap());
     }
 }
