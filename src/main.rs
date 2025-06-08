@@ -34,14 +34,26 @@ impl HashMap {
 
         let mut index = start_index;
 
-        while self.items.get(index).unwrap().is_some() {
-            index = (index + 1) % self.capacity;
-            if index == start_index {
-                return;
+        loop {
+            match &self.items[index] {
+                Some(item) => {
+                    if item.key == key_val.key {
+                        self.items[index] = Some(key_val);
+                        break;
+                    } else {
+                        index = (index + 1) % self.capacity;
+                        if index == start_index {
+                            return;
+                        }
+                    }
+                }
+
+                None => {
+                    self.items[index] = Some(key_val);
+                    break;
+                }
             }
         }
-
-        self.items[index] = Some(key_val);
 
         if self.first_item.is_none() {
             self.first_item = Some(index);
@@ -90,6 +102,10 @@ impl HashMap {
         } else {
             None
         }
+    }
+
+    fn get_last(&self) -> Option<MapItem> {
+        None
     }
 }
 
@@ -146,6 +162,25 @@ mod tests {
     }
 
     #[test]
+    fn update_value() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem {
+                key: word.1.to_string(),
+                value: word.0 as i32 + 100,
+            });
+        }
+
+        hmap.insert(MapItem {
+            key: TEST_WORDS[2].to_string(),
+            value: 77,
+        });
+
+        let updated_value = hmap.get(TEST_WORDS[2]);
+        assert_eq!(77, updated_value.unwrap());
+    }
+
+    #[test]
     fn insert_colliding_key() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
         for word in TEST_WORDS.iter().enumerate() {
@@ -199,6 +234,27 @@ mod tests {
                 value: 100,
             },
             first_item.unwrap()
+        );
+    }
+
+    #[test]
+    fn get_last_touched_pair() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem {
+                key: word.1.to_string(),
+                value: word.0 as i32 + 100,
+            });
+        }
+
+        let last_item = hmap.get_last();
+
+        assert_eq!(
+            MapItem {
+                key: TEST_WORDS[3].to_string(),
+                value: 103,
+            },
+            last_item.unwrap()
         );
     }
 }
