@@ -1,18 +1,18 @@
 use regex::Regex;
 use std::fs;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct MapItem {
     key: String,
     value: i32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct HashMap {
     items: Vec<Option<MapItem>>,
     capacity: usize,
     // last_item: Option<MapItem>,
-    // first_item: Option<MapItem>,
+    first_item: Option<usize>,
 }
 
 impl HashMap {
@@ -22,6 +22,7 @@ impl HashMap {
         HashMap {
             items: vec,
             capacity: vec_size,
+            ..Default::default()
         }
     }
 
@@ -41,6 +42,10 @@ impl HashMap {
         }
 
         self.items[index] = Some(key_val);
+
+        if self.first_item.is_none() {
+            self.first_item = Some(index);
+        }
     }
 
     fn get(&self, key: &str) -> Option<i32> {
@@ -76,6 +81,14 @@ impl HashMap {
                 }
                 None => break,
             }
+        }
+    }
+
+    fn get_first(&self) -> Option<MapItem> {
+        if self.first_item.is_some() {
+            self.items[self.first_item.unwrap()].clone()
+        } else {
+            None
         }
     }
 }
@@ -166,5 +179,26 @@ mod tests {
 
         let deleted_value = hmap.get(TEST_WORDS[3]);
         assert_eq!(None, deleted_value);
+    }
+
+    #[test]
+    fn get_first_pair() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem {
+                key: word.1.to_string(),
+                value: word.0 as i32 + 100,
+            });
+        }
+
+        let first_item = hmap.get_first();
+
+        assert_eq!(
+            MapItem {
+                key: TEST_WORDS[0].to_string(),
+                value: 100,
+            },
+            first_item.unwrap()
+        );
     }
 }
