@@ -19,32 +19,45 @@ impl HashMap {
     fn new(size: usize) -> Self {
         let vec_size = optimal_initial_size_factor(size);
         let mut vec: Vec<Option<MapItem>> = vec![None; vec_size];
-        HashMap { items: vec,
-        capacity: vec_size }
+        HashMap {
+            items: vec,
+            capacity: vec_size,
+        }
     }
 
     /// Not handling that this function may be fallible. E.g.
     /// - there may not be enough room in the vector
-    /// - not handling wrap-around at the end of the vector
+    /// --> just unwrap get(index)
     fn insert(&mut self, key_val: MapItem) {
-        // calculate hash of String
+        let start_index = key_to_index(&key_val.key, self.capacity);
 
-        // check index, move on if not present
+        let mut index = start_index;
 
-        let index = key_to_index(&key_val.key, self.capacity);
-        self.items.insert(index, Some(key_val));
+        while self.items.get(index).unwrap().is_some() {
+            index = (index + 1) % self.capacity;
+            if index == start_index {
+                return;
+            }
+        }
+
+        self.items[index] = Some(key_val);
     }
 
     fn get(&self, key: &str) -> Option<i32> {
-        let index = key_to_index(key, self.capacity);
-        let thing_at_index: Option<&Option<MapItem>> = self.items.get(index);
+        let start_index = key_to_index(key, self.capacity);
+        let mut index = start_index;
 
-        match thing_at_index {
-            Some(i) => match i {
-                Some(ii) => Some(ii.value),
-                None => None,
-            },
-            None => None,
+        loop {
+            match &self.items[index] {
+                Some(item) if item.key == key => return Some(item.value),
+                Some(_) => {
+                    index = (index + 1) % self.capacity;
+                    if index == start_index {
+                        return None;
+                    }
+                }
+                None => return None,
+            }
         }
     }
 }
@@ -57,15 +70,12 @@ fn optimal_initial_size_factor(initial_guess: usize) -> usize {
     initial_guess * 2
 }
 
-
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 fn key_to_index(key: &str, len: usize) -> usize {
-
-
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
-    (hasher.finish() as usize ) % len
+    (hasher.finish() as usize) % len
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -88,6 +98,8 @@ mod tests {
     use super::*;
 
     const TEST_WORDS: [&str; 4] = ["abcd", "1984", "Gutenberg", "eBook"];
+    const COLLIDING_WORDS: [&str; 1] = ["asdf"];
+
     #[test]
     fn insert_key() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
@@ -98,13 +110,40 @@ mod tests {
         };
         hmap.insert(item);
 
-        println!("map {:#?}", hmap);
-
         let inserted_value = hmap.get("test");
         assert_eq!(33, inserted_value.unwrap());
     }
 
-    
-    // same word twice
-    // index collision
+    #[test]
+    fn find_colliding_indices() {
+        for word in &TEST_WORDS {
+            let idx = key_to_index(word, 8);
+            println!("key, index {} - {}", word, idx);
+        }
+        for word in &COLLIDING_WORDS {
+            let idx = key_to_index(word, 8);
+            println!("key, index {} - {}", word, idx);
+        }
+    }
+
+    #[test]
+    fn insert_colliding_key() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem {
+                key: word.1.to_string(),
+                value: word.0 as i32 + 100,
+            });
+        }
+
+        let item = MapItem {
+            key: COLLIDING_WORDS[0].to_string(),
+            value: 33,
+        };
+        hmap.insert(item);
+
+        let inserted_value = hmap.get(COLLIDING_WORDS[0]);
+        assert_eq!(33, inserted_value.unwrap());
+    }
 }
