@@ -60,6 +60,24 @@ impl HashMap {
             }
         }
     }
+
+    fn remove(&mut self, key: &str) {
+        let start_index = key_to_index(key, self.capacity);
+        let mut index = start_index;
+
+        loop {
+            match &self.items[index] {
+                Some(item) if item.key == key => self.items[index] = None,
+                Some(_) => {
+                    index = (index + 1) % self.capacity;
+                    if index == start_index {
+                        break;
+                    }
+                }
+                None => break,
+            }
+        }
+    }
 }
 
 /// We haven't had a discussion about performance trade-offs
@@ -115,21 +133,8 @@ mod tests {
     }
 
     #[test]
-    fn find_colliding_indices() {
-        for word in &TEST_WORDS {
-            let idx = key_to_index(word, 8);
-            println!("key, index {} - {}", word, idx);
-        }
-        for word in &COLLIDING_WORDS {
-            let idx = key_to_index(word, 8);
-            println!("key, index {} - {}", word, idx);
-        }
-    }
-
-    #[test]
     fn insert_colliding_key() {
         let mut hmap = HashMap::new(TEST_WORDS.len());
-
         for word in TEST_WORDS.iter().enumerate() {
             hmap.insert(MapItem {
                 key: word.1.to_string(),
@@ -145,5 +150,21 @@ mod tests {
 
         let inserted_value = hmap.get(COLLIDING_WORDS[0]);
         assert_eq!(33, inserted_value.unwrap());
+    }
+
+    #[test]
+    fn remove_key() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem {
+                key: word.1.to_string(),
+                value: word.0 as i32 + 100,
+            });
+        }
+
+        hmap.remove(TEST_WORDS[3]);
+
+        let deleted_value = hmap.get(TEST_WORDS[3]);
+        assert_eq!(None, deleted_value);
     }
 }
