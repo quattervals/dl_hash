@@ -196,8 +196,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let words: Vec<&str> = re.find_iter(&book_raw).map(|m| m.as_str()).collect();
     let mut hmap = HashMap::new(words.len());
 
-
-
     for word in words.iter().enumerate() {
         hmap.insert(MapItem::new(word.1, word.0 as i32));
     }
@@ -207,7 +205,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     hmap.remove("eBooks"); // happens to be the last
     println!("last updated last word is {:#?}", hmap.get_last());
-
 
     Ok(())
 }
@@ -337,5 +334,18 @@ mod tests {
         let last_item = hmap.get_last();
 
         items_equal(&MapItem::new(TEST_WORDS[3], 103), &last_item.unwrap());
+    }
+
+    #[test]
+    fn get_last_touched_item_after_update() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+        for word in TEST_WORDS.iter().enumerate() {
+            hmap.insert(MapItem::new(word.1, word.0 as i32 + 100));
+        }
+
+        hmap.insert(MapItem::new(TEST_WORDS[2], 99));
+
+        let last_item = hmap.get_last();
+        items_equal(&MapItem::new(TEST_WORDS[2], 99), &last_item.unwrap());
     }
 }
