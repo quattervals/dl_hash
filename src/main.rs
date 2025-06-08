@@ -1,7 +1,7 @@
 use regex::Regex;
 use std::fs;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct MapItem {
     key: String,
     value: i32,
@@ -9,15 +9,43 @@ struct MapItem {
 
 #[derive(Debug)]
 struct HashMap {
-    items: Vec<MapItem>,
+    items: Vec<Option<MapItem>>,
+    capacity: usize,
     // last_item: Option<MapItem>,
     // first_item: Option<MapItem>,
 }
 
 impl HashMap {
     fn new(size: usize) -> Self {
-        let mut vec = Vec::with_capacity(size * optimal_initial_size_factor(size));
-        HashMap { items: vec }
+        let vec_size = optimal_initial_size_factor(size);
+        let mut vec: Vec<Option<MapItem>> = vec![None; vec_size];
+        HashMap { items: vec,
+        capacity: vec_size }
+    }
+
+    /// Not handling that this function may be fallible. E.g.
+    /// - there may not be enough room in the vector
+    /// - not handling wrap-around at the end of the vector
+    fn insert(&mut self, key_val: MapItem) {
+        // calculate hash of String
+
+        // check index, move on if not present
+
+        let index = key_to_index(&key_val.key, self.capacity);
+        self.items.insert(index, Some(key_val));
+    }
+
+    fn get(&self, key: &str) -> Option<i32> {
+        let index = key_to_index(key, self.capacity);
+        let thing_at_index: Option<&Option<MapItem>> = self.items.get(index);
+
+        match thing_at_index {
+            Some(i) => match i {
+                Some(ii) => Some(ii.value),
+                None => None,
+            },
+            None => None,
+        }
     }
 }
 
@@ -27,6 +55,17 @@ impl HashMap {
 /// So this function only returns a heuristic tuning value
 fn optimal_initial_size_factor(initial_guess: usize) -> usize {
     initial_guess * 2
+}
+
+
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+fn key_to_index(key: &str, len: usize) -> usize {
+
+
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    (hasher.finish() as usize ) % len
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,8 +89,22 @@ mod tests {
 
     const TEST_WORDS: [&str; 4] = ["abcd", "1984", "Gutenberg", "eBook"];
     #[test]
-    fn create_hashmap() {
-        let hmap = HashMap::new(TEST_WORDS.len());
+    fn insert_key() {
+        let mut hmap = HashMap::new(TEST_WORDS.len());
+
+        let item = MapItem {
+            key: "test".to_string(),
+            value: 33,
+        };
+        hmap.insert(item);
+
         println!("map {:#?}", hmap);
+
+        let inserted_value = hmap.get("test");
+        assert_eq!(33, inserted_value.unwrap());
     }
+
+    
+    // same word twice
+    // index collision
 }
