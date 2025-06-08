@@ -137,17 +137,6 @@ impl HashMap {
             self.items[successor_idx].as_mut().unwrap().index_prev = Some(pred_idx);
         }
 
-        // let current_item = self.items[index].as_ref().unwrap();
-
-        // println!(
-        //     "previous {:#?}",
-        //     self.items[current_item.index_prev.unwrap()]
-        //         .as_ref()
-        //         .unwrap()
-        // );
-        // println!(" current {:#?}", self.items[index].as_mut().unwrap());
-        // println!("index {index}");
-
         self.items[index] = None;
     }
 
@@ -170,10 +159,9 @@ impl HashMap {
     }
 
     fn get_first(&self) -> Option<MapItem> {
-        if self.first_touched.is_some() {
-            self.items[self.first_touched.unwrap()].clone()
-        } else {
-            None
+        match self.first_touched {
+            Some(idx) => Some(self.items[idx].as_ref().unwrap().clone()),
+            None => None,
         }
     }
 
@@ -206,10 +194,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // i.e. anything matching word characters between non-word characters
     let re = Regex::new(r"\b\w+\b").unwrap();
     let words: Vec<&str> = re.find_iter(&book_raw).map(|m| m.as_str()).collect();
+    let mut hmap = HashMap::new(words.len());
 
-    for word in &words {
-        println!("word {word}");
+
+
+    for word in words.iter().enumerate() {
+        hmap.insert(MapItem::new(word.1, word.0 as i32));
     }
+
+    println!("first word is {:#?}", hmap.get_first());
+    println!("last word is {:#?}", hmap.get_last());
+
+    hmap.remove("eBooks"); // happens to be the last
+    println!("last updated last word is {:#?}", hmap.get_last());
+
 
     Ok(())
 }
